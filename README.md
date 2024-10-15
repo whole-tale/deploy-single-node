@@ -1,13 +1,15 @@
 # Whole Tale Single-Node Installation
 
-This repo contains scripts requires to run a full instance of the Whole Tale
+This repo contains scripts required to run a full instance of the Whole Tale
 platform on a single system. This repo is based on https://github.com/whole-tale/deploy-dev, 
 which is used to deploy development instances.
 
 ## Prerequisites
+Instructions for these are listed below:
 * **Wildcard DNS**: You must have a preconfigured wildcard domain (e.g., `*.wholetale.org`) and IP address. To use this repo, your DNS provider must be supported by [Let's Encrypt](https://go-acme.github.io/lego/dns/index.html) to automatically obtain wildcard TLS certificates. Cloudflare is strongly recommended.
 * **Globus App**: You must register a Globus App to use Globus Authentication
 * **ORCID App**: You must register an ORCID App to publish tales
+
 
 
 ## System Requirements
@@ -140,6 +142,37 @@ make clean
 
 
 ## Other
+
+### Using Godaddy
+
+The original deployment uses GoDaddy, which has proven unreliable when working with LE.
+To use GoDaddy with LE:
+
+```
+export GODADDY_API_KEY=<API Key>
+export GODADDY_API_SECRET=<Secret>
+```
+
+Modify `docker-stack.yml`:
+```
+services:
+  traefik:
+...
+    environment:
+      - GODADDY_API_KEY=$WT_GODADDY_API_KEY
+      - GODADDY_API_SECRET=$WT_GODADDY_API_SECRET
+```
+
+Modify `traefik/traefik.toml`:
+```
+[certificatesResolvers]
+  [certificatesResolvers.default]
+    [certificatesResolvers.default.acme]
+...
+      [certificatesResolvers.default.acme.dnsChallenge]
+        provider = "godaddy"
+```
+
 
 ### Configure DNS
 This deployment requires that you have a valid wildcard DNS entry. To configure DNS in Cloudflare:
