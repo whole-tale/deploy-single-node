@@ -240,5 +240,8 @@ Change CORS Allowed Origin
 
 * Mongo has been bumped to 4.4. Since previous versions of Wholetale used 3.2, you will need to migrate your database. See [MongoDB upgrade instructions](https://docs.mongodb.com/manual/release-notes/4.4-upgrade/) for more information.
 * Some girder settings change their names (mostly ``*_root`` that are pointing to various volume mounts). Compare current
-  `setup_girder.py` with the one on main branch.
+  ``setup_girder.py`` with the one on main branch.
 * See [Girder's migration guide](https://github.com/girder/girder/blob/v4-integration/docs/migration-guide.rst) for more information on what changed in Girder 2.x to 5.x. Lack of ``girder.local.cfg`` and use of ENV vars is one of the most important changes.
+* Projects using WholeTale are advised to build their own images based on the latest Girder 5.x for both girder itself
+  and girder_worker, since installing additional plugins requires `pip install`ing them anyway. Example Dockerfiles for
+  both can be found in [docker/](docker/) directory.
