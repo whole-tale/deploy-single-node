@@ -1,6 +1,6 @@
 .PHONY: clean dirs deploy images restart_worker status
 
-SUBDIRS = volumes/ps volumes/workspaces volumes/homes volumes/base volumes/versions volumes/runs volumes/licenses traefik/acme
+SUBDIRS = volumes/ps volumes/workspaces volumes/homes volumes/base volumes/versions volumes/runs volumes/licenses traefik/acme volumes/registry
 TAG = latest
 MEM_LIMIT = 2048
 NODE = node --max_old_space_size=${MEM_LIMIT}
@@ -13,7 +13,7 @@ images:
 	docker pull redis:latest
 	docker pull registry:2.6
 	docker pull node:carbon-slim
-	docker pull wholetale/girder:$(TAG)
+	docker pull wholetale/girder:2.x
 	docker pull wholetale/gwvolman:$(TAG)
 	docker pull wholetale/repo2docker_wholetale:$(TAG)
 	docker pull wholetale/ngx-dashboard:$(TAG)
@@ -22,12 +22,12 @@ dirs: $(SUBDIRS)
 
 $(SUBDIRS):
 	@sudo mkdir -p $@
+	@sudo chown 1000:1000 $@
 
 services: dirs 
 
 deploy: dirs
 	docker stack deploy --compose-file=docker-stack.yml wt
-	./run_worker.sh
 	cid=$$(docker ps --filter=name=wt_girder -q);
 	while [ -z $${cid} ] ; do \
 		  echo $${cid} ; \

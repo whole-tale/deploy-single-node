@@ -51,48 +51,11 @@ r = requests.post(
     params={
         "type": 0,
         "name": "Base",
-        "root": "/tmp/data/base",
+        "root": "/srv/data/base",
     },
 )
 
-print("Enabling plugins")
-plugins = [
-    "oauth",
-    "gravatar",
-    "jobs",
-    "worker",
-    "globus_handler",
-    "virtual_resources",
-    "wt_data_manager",
-    "wholetale",
-    "wt_home_dir",
-    "wt_versioning",
-]
-r = requests.put(
-    api_url + "/system/plugins",
-    headers=headers,
-    params={"plugins": json.dumps(plugins)},
-)
-r.raise_for_status()
-
-print("Restarting girder to load plugins")
-r = requests.put(api_url + "/system/restart", headers=headers)
-r.raise_for_status()
-
-# Give girder time to restart
-while True:
-    print("Waiting for Girder to restart")
-    r = requests.get(
-        api_url + "/oauth/provider",
-        headers=headers,
-        params={"redirect": "http://blah.com"},
-    )
-    if r.status_code == 200:
-        break
-    time.sleep(2)
-
 print("Setting up Plugin")
-
 settings = [
     {
         "key": "core.cors.allow_origin",
@@ -108,7 +71,6 @@ settings = [
         ),
     },
     {"key": "core.cookie_domain", "value": f".{domain}"},
-    {"key": "core.secure_cookie", "value": True},
     {"key": "worker.api_url", "value": "http://girder:8080/api/v1"},
     {"key": "worker.broker", "value": "redis://redis/"},
     {"key": "worker.backend", "value": "redis://redis/"},
@@ -123,20 +85,14 @@ settings = [
         "value": os.environ.get("ORCID_CLIENT_SECRET"),
     },
     {"key": "oauth.providers_enabled", "value": ["globus"]},
-    {"key": "dm.globus_gc_dir", "value": "/opt/globusconnectpersonal"},
-    {
-        "key": "wholetale.dataverse_extra_hosts",
-        "value": ["dev2.dataverse.org", "demo.dataverse.org"],
-    },
-    {
-        "key": "wholetale.zenodo_extra_hosts",
-        "value": ["https://sandbox.zenodo.org/record/"]
-    },
-    {"key": "dm.private_storage_path", "value": "/tmp/data/ps"},
-    {"key": "wthome.homedir_root", "value": "/tmp/data/homes"},
-    {"key": "wthome.taledir_root", "value": "/tmp/data/workspaces"},
-    {"key": "wtversioning.runs_root", "value": "/tmp/data/runs"},
-    {"key": "wtversioning.versions_root", "value": "/tmp/data/versions"},
+    {"key": "dm.private_storage_path", "value": "/srv/data/ps"},
+    {"key": "wholetale.homes_root", "value": "/srv/data/homes"},
+    {"key": "wholetale.workspaces_root", "value": "/srv/data/workspaces"},
+    {"key": "wholetale.runs_root", "value": "/srv/data/runs"},
+    {"key": "wholetale.versions_root", "value": "/srv/data/versions"},
+    {"key": "wholetale.dashboard_link_title", "value": "Tale Dashboard"},
+    {"key": "wholetale.catalog_link_title", "value": "Data Catalog"},
+    {"key": "wholetale.enable_data_catalog", "value": True},
 ]
 
 r = requests.put(
@@ -159,7 +115,4 @@ for image in images:
     r = requests.post(api_url + "/image", headers=headers, params=image)
     r.raise_for_status()
 
-print("Restarting girder to update WebDav roots")
-r = requests.put(api_url + "/system/restart", headers=headers)
-r.raise_for_status()
 final_msg()

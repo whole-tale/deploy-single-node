@@ -1,5 +1,8 @@
 # Whole Tale Single-Node Installation
 
+> [!IMPORTANT] If you're migrating from old <2.0 deployment there are additional steps you need to take.
+> See [Migration from 1.x to 2.x](#migration-from-1.x-to-2.x) for more information.
+
 This repo contains scripts required to run a full instance of the Whole Tale
 platform on a single system. This repo is based on https://github.com/whole-tale/deploy-dev, 
 which is used to deploy development instances.
@@ -9,7 +12,6 @@ Instructions for these are listed below:
 * **Wildcard DNS**: You must have a preconfigured wildcard domain (e.g., `*.wholetale.org`) and IP address. To use this repo, your DNS provider must be supported by [Let's Encrypt](https://go-acme.github.io/lego/dns/index.html) to automatically obtain wildcard TLS certificates. Cloudflare is strongly recommended.
 * **Globus App**: You must register a Globus App to use Globus Authentication
 * **ORCID App**: You must register an ORCID App to publish tales
-
 
 
 ## System Requirements
@@ -232,3 +234,11 @@ Change CORS Allowed Origin
 * Go to Admin console > System configuration > Advanced settings
 * Update the CORS Allowed Origin to `https://dashboard.<your-domain>`
 
+# Migration from 1.x to 2.x
+
+> [!WARNING] This section is still under construction.
+
+* Mongo has been bumped to 4.4. Since previous versions of Wholetale used 3.2, you will need to migrate your database. See [MongoDB upgrade instructions](https://docs.mongodb.com/manual/release-notes/4.4-upgrade/) for more information.
+* Some girder settings change their names (mostly ``*_root`` that are pointing to various volume mounts). Compare current
+  `setup_girder.py` with the one on main branch.
+* See [Girder's migration guide](https://github.com/girder/girder/blob/v4-integration/docs/migration-guide.rst) for more information on what changed in Girder 2.x to 5.x. Lack of ``girder.local.cfg`` and use of ENV vars is one of the most important changes.

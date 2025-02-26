@@ -1,5 +1,3 @@
-version: '3.2'
-
 services:
   traefik:
     image: traefik:v2.4
@@ -11,16 +9,20 @@ services:
     volumes:
       - /var/run/docker.sock:/var/run/docker.sock
       - ./traefik:/etc/traefik
-      - ./traefik/acme:/acme
+      - ./traefik/certs/fullchain.pem:/cert.pem
+      - ./traefik/certs/privkey.pem:/key.pem
+        #  - ./traefik/acme:/acme
     deploy:
       replicas: 1
       labels:
         - "traefik.enable=false"
     environment:
-      - CF_DNS_API_TOKEN=$WT_CLOUDFLARE_TOKEN
+      - TRAEFIK_PROVIDERS_DOCKER_DEFAULTRULE="Host(`\{\{ trimPrefix `/` .Name \}\}.${WT_DOMAIN}`)"
+    #environment:
+    #  - CF_DNS_API_TOKEN=$WT_CLOUDFLARE_TOKEN
 
   mongo:
-    image: mongo:3.2
+    image: mongo:4.4
     networks:
       - mongo
     volumes:
@@ -32,31 +34,29 @@ services:
         - "traefik.enable=false"
 
   girder:
-    image: wholetale/girder:v1.2
+    image: wholetale/girder:2.x
+    user: "1000:999"
     networks:
       - traefik-net
       - celery
       - mongo
+    depends_on:
+      - mongo
+      - redis
+      - traefik
     volumes:
-      - ./volumes:/tmp/data
-      - ./girder/girder.local.cfg:/girder/girder/conf/girder.local.cfg
-      # - ./src/wholetale:/girder/plugins/wholetale
-      # - ./src/wt_data_manager:/girder/plugins/wt_data_manager
-      # - ./src/wt_home_dir:/girder/plugins/wt_home_dir
-      # - ./src/wt_versioning:/girder/plugins/wt_versioning
-      # - ./src/globus_handler:/girder/plugins/globus_handler
-      # - ./src/virtual_resources:/girder/plugins/virtual_resources
-      # - ./src/gwvolman:/gwvolman
-      # - ./src/girderfs:/girderfs
+      - ./volumes:/srv/data
       - /var/run/docker.sock:/var/run/docker.sock
       - /tmp:/tmp
     environment:
       - DOMAIN=$WT_DOMAIN
       - DASHBOARD_URL=https://dashboard.${WT_DOMAIN}
-      - GOSU_USER=girder:girder:999
-      - "GOSU_CHOWN=/tmp/data"
+      - GIRDER_HOST=0.0.0.0
       - DATAONE_URL=https://cn-stage-2.test.dataone.org/cn
       - HOSTDIR=/
+      - GIRDER_MONGO_URI=mongodb://mongo:27017/girder
+      - GIRDER_WORKER_BACKEND=redis://redis:6379/
+      - GIRDER_WORKER_BROKER=redis://redis:6379/
     deploy:
       replicas: 1
       labels:
@@ -70,7 +70,7 @@ services:
         - "traefik.http.services.girder.loadbalancer.server.port=8080"
         - "traefik.http.services.girder.loadbalancer.passhostheader=true"
         - "traefik.docker.network=wt_traefik-net"
-        - "traefik.http.middlewares.girder.forwardauth.address=http://girder:8080/api/v1/instance/authorize/"
+        - "traefik.http.middlewares.girder.forwardauth.address=http://girder:8080/api/v1/user/authorize/"
         - "traefik.http.middlewares.girder.forwardauth.trustforwardheader=true"
 
   logger:
@@ -85,7 +85,7 @@ services:
         - "traefik.enable=false"
 
   redis:
-    image: redis:4-stretch
+    image: redis:7-bullseye
     networks:
       - celery
     deploy:
@@ -94,9 +94,14 @@ services:
         - "traefik.enable=false"
 
   dashboard:
-    image: wholetale/ngx-dashboard:v1.2
+    image: wholetale/ngx-dashboard:latest
     networks:
       - traefik-net
+    depends_on:
+      - girder
+      - traefik
+    extra_hosts:
+      - "girder.${WT_DOMAIN}:host-gateway"
     environment:
       - GIRDER_API_URL=https://girder.${WT_DOMAIN}/api/v1
       - AUTH_PROVIDER=Globus
@@ -110,11 +115,9 @@ services:
         - "traefik.http.routers.dashboard.rule=Host(`dashboard.${WT_DOMAIN}`)"
         - "traefik.http.routers.dashboard.entrypoints=websecure"
         - "traefik.http.routers.dashboard.tls=true"
-        - "traefik.http.services.dashboard.loadbalancer.server.port=80"
+        - "traefik.http.services.dashboard.loadbalancer.server.port=8080"
         - "traefik.http.services.dashboard.loadbalancer.passhostheader=true"
         - "traefik.docker.network=wt_traefik-net"
-    #volumes:
-    #  - ./src/ngx-dashboard/dist/browser/:/usr/share/nginx/html/
   
   instance-errors:
     image: wholetale/custom-errors:latest
@@ -140,7 +143,7 @@ services:
     networks:
       - traefik-net
     volumes:
-      - ./registry:/var/lib/registry
+      - ./volumes/registry:/var/lib/registry
       - ./registry/auth:/auth:ro
     environment:
       - REGISTRY_AUTH=htpasswd
@@ -162,7 +165,7 @@ services:
     networks:
       - traefik-net
     volumes:
-      - ./registry:/var/lib/registry:ro
+      - ./volumes/registry:/var/lib/registry:ro
     deploy:
       replicas: 1
       labels:
@@ -175,52 +178,40 @@ services:
         - "traefik.http.services.images.loadbalancer.passhostheader=true"
         - "traefik.docker.network=wt_traefik-net"
 
-  instance_errors:
-    image: wholetale/custom-errors:v1.1
+  celery_worker:
+    image: wholetale/gwvolman:v2.1.2
     networks:
-      - traefik-net
+      - celery
+    user: "1000:999"
+    depends_on:
+      - redis
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock
+      - ./volumes/tmp:/tmp
+    extra_hosts:
+      - "images.${WT_DOMAIN}:host-gateway"
+      - "registry.${WT_DOMAIN}:host-gateway"
+      - "girder.${WT_DOMAIN}:host-gateway"
+    environment:
+      - GIRDER_API_URL=http://girder:8080/api/v1
+      - GIRDER_WORKER_BACKEND=redis://redis:6379/
+      - GIRDER_WORKER_BROKER=redis://redis:6379/
+      - DOMAIN=${WT_DOMAIN}
+      - TRAEFIK_NETWORK=wt_traefik-net
+      - TRAEFIK_ENTRYPOINT=websecure
+      - REGISTRY_USER=fido
+      - REGISTRY_URL=https://registry.${WT_DOMAIN}
+      - REGISTRY_PASS=${registry_pass}
+      - WT_LICENSE_PATH=${PWD}/volumes/licenses
+      - WT_VOLUMES_PATH=${PWD}/volumes
+      - SWARM_NODE_ID={{.Node.ID}}
+      - REPO2DOCKER_VERSION=xarthisius/repo2docker_wholetale:20240926
+      - GIRDERFS_IMAGE=wholetale/girderfs:latest
     deploy:
-      replicas: 1
+      mode: global
       labels:
-        - "traefik.enable=true"
-        - "traefik.http.routers.instance-errors.rule=HostRegexp(`{host:tmp-.*}`)"
-        - "traefik.http.routers.instance-errors.entrypoints=websecure"
-        - "traefik.http.routers.instance-errors.tls=true"
-        - "traefik.http.routers.instance-errors.priority=1"
-        - "traefik.http.routers.instance-errors.middlewares=error-pages-middleware"
-        - "traefik.http.middlewares.error-pages-middleware.errors.status=400-599"
-        - "traefik.http.middlewares.error-pages-middleware.errors.service=instance-errors"
-        - "traefik.http.middlewares.error-pages-middleware.errors.query=/{status}.html"
-        - "traefik.http.services.instance-errors.loadbalancer.server.port=80"
-        - "traefik.docker.network=wt_traefik-net"
-
-#  celery_worker:
-#    image: wholetale/gwvolman
-#    networks:
-#      - celery
-#    labels:
-#      - "traefik.enable=false"
-#    environment:
-#      - GIRDER_API_URL=https://girder.${WT_DOMAIN}/api/v1
-#      - HOSTDIR=/host
-#      - DOMAIN=${WT_DOMAIN}
-#      - TRAEFIK_NETWORK=wt_traefik-net
-#      - TRAEFIK_ENTRYPOINT=https
-#      - REGISTRY_USER=fido
-#      - REGISTRY_URL=https://registry.${WT_DOMAIN}
-#      - REGISTRY_PASS=secretpass
-#    volumes:
-#      - /var/run/docker.sock:/var/run/docker.sock:ro
-#      - /:/host
-#      - /var/cache/davfs2:/var/cache/davfs2
-#      - /run/mount.davfs:/run/mount.davfs
-#    cap_add:
-#      - SYS_ADMIN
-#      - SYS_PTRACE
-#    devices:
-#      - /dev/fuse:/dev/fuse
-#    command: -Q manager,celery,xa3bl9runqzk8dgbl5gc6nlnq --hostname=xa3bl9runqzk8dgbl5gc6nlnq
-
+        - "traefik.enable=false"
+    command: -c 3
 
 networks:
   traefik-net:
