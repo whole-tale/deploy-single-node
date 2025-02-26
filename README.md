@@ -1,7 +1,8 @@
 # Whole Tale Single-Node Installation
 
-> [!IMPORTANT] If you're migrating from old <2.0 deployment there are additional steps you need to take.
-> See [Migration from 1.x to 2.x](#migration-from-1.x-to-2.x) for more information.
+> [!IMPORTANT] 
+> If you're migrating from old <2.0 deployment there are additional steps you need to take.
+> See [Migration from 1.x to 2.x](#migration-from-1x-to-2x) for more information.
 
 This repo contains scripts required to run a full instance of the Whole Tale
 platform on a single system. This repo is based on https://github.com/whole-tale/deploy-dev, 
@@ -236,7 +237,8 @@ Change CORS Allowed Origin
 
 # Migration from 1.x to 2.x
 
-> [!WARNING] This section is still under construction.
+> [!WARNING]
+> This section is still under construction.
 
 * Mongo has been bumped to 4.4. Since previous versions of Wholetale used 3.2, you will need to migrate your database. See [MongoDB upgrade instructions](https://docs.mongodb.com/manual/release-notes/4.4-upgrade/) for more information.
 * Some girder settings change their names (mostly ``*_root`` that are pointing to various volume mounts). Compare current
