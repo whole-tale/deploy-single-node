@@ -27,6 +27,7 @@ $(SUBDIRS):
 services: dirs 
 
 deploy: dirs
+	. ./.env && htpasswd -Bbn $${registry_user} $${registry_pass} > registry/auth/registry.password
 	. ./.env && docker stack config --compose-file docker-stack.yml | docker stack deploy --compose-file=docker-stack.yml wt
 	cid=$$(docker ps --filter=name=wt_girder -q);
 	while [ -z $${cid} ] ; do \
