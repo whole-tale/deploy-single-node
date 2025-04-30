@@ -81,6 +81,7 @@ services:
       - GIRDER_MONGO_URI=mongodb://mongo:27017/girder
       - GIRDER_WORKER_BACKEND=redis://redis:6379/
       - GIRDER_WORKER_BROKER=redis://redis:6379/
+    entrypoint: ["/usr/bin/tini", "--", "girder", "serve", "-H", "0.0.0.0"]  # gunicorn doesn't work with notifications
     deploy:
       replicas: 1
       labels:
