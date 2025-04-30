@@ -27,7 +27,7 @@ $(SUBDIRS):
 services: dirs 
 
 deploy: dirs
-	docker stack deploy --compose-file=docker-stack.yml wt
+	. ./.env && docker stack config --compose-file docker-stack.yml | docker stack deploy --compose-file=docker-stack.yml wt
 	cid=$$(docker ps --filter=name=wt_girder -q);
 	while [ -z $${cid} ] ; do \
 		  echo $${cid} ; \

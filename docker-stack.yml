@@ -9,17 +9,13 @@ services:
     volumes:
       - /var/run/docker.sock:/var/run/docker.sock
       - ./traefik:/etc/traefik
-      - ./traefik/certs/fullchain.pem:/cert.pem
-      - ./traefik/certs/privkey.pem:/key.pem
-        #  - ./traefik/acme:/acme
+      - ./traefik/acme:/acme
     deploy:
       replicas: 1
       labels:
         - "traefik.enable=false"
     environment:
-      - TRAEFIK_PROVIDERS_DOCKER_DEFAULTRULE="Host(`\{\{ trimPrefix `/` .Name \}\}.${WT_DOMAIN}`)"
-    #environment:
-    #  - CF_DNS_API_TOKEN=$WT_CLOUDFLARE_TOKEN
+      - CF_DNS_API_TOKEN=$WT_CLOUDFLARE_TOKEN
 
   mongo:
     image: mongo:4.4
@@ -33,9 +29,38 @@ services:
       labels:
         - "traefik.enable=false"
 
+  local_worker:
+    image: wholetale/girder:2.x
+    user: "${girder_uid}:${gider_gid}"
+    networks:
+      - celery
+      - mongo
+    depends_on:
+      - mongo
+      - redis
+      - girder
+    volumes:
+      - ./volumes:/srv/data
+      - /var/run/docker.sock:/var/run/docker.sock:ro
+      - /tmp:/tmp
+    extra_hosts:
+      - "girder.${WT_DOMAIN}:host-gateway"
+    environment:
+      - DOMAIN=$WT_DOMAIN
+      - DASHBOARD_URL=https://dashboard.${WT_DOMAIN}
+      - HOSTDIR=/
+      - GIRDER_MONGO_URI=mongodb://mongo:27017/girder
+      - GIRDER_WORKER_BACKEND=redis://redis:6379/
+      - GIRDER_WORKER_BROKER=redis://redis:6379/
+    entrypoint: ["/usr/bin/tini", "--", "celery", "--app=girder_worker.app", "worker", "--queues=local", "-c", "2", "--loglevel=INFO"]
+    deploy:
+      replicas: 1
+      labels:
+        - "traefik.enable=false"
+
   girder:
     image: wholetale/girder:2.x
-    user: "1000:999"
+    user: "${girder_uid}:${girder_gid}"
     networks:
       - traefik-net
       - celery
@@ -52,7 +77,6 @@ services:
       - DOMAIN=$WT_DOMAIN
       - DASHBOARD_URL=https://dashboard.${WT_DOMAIN}
       - GIRDER_HOST=0.0.0.0
-      - DATAONE_URL=https://cn-stage-2.test.dataone.org/cn
       - HOSTDIR=/
       - GIRDER_MONGO_URI=mongodb://mongo:27017/girder
       - GIRDER_WORKER_BACKEND=redis://redis:6379/

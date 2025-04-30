@@ -1,7 +1,9 @@
 src/*
-registry/docker
+registry/
 traefik/access.log
 traefik/acme
 homes/*
 ps/*
 volumes/
+traefik/certs
+traefik/dynamic

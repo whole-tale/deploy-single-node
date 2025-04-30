@@ -19,10 +19,10 @@
     swarmMode = true
     swarmModeRefreshSeconds = "15s"
     httpClientTimeout = "0s"
-    defaultRule = 'Host(`{{ trimPrefix `/` .Name }}.{{ env "WT_DOMAIN" | default "local.xarthisius.xyz" }}`)'
   [providers.file]
-    filename="/etc/traefik/vocab.toml"
+    directory="/etc/traefik/dynamic"
     watch=true
+
 
 [tls.options]
   [tls.options.default]
@@ -64,9 +64,8 @@
 [certificatesResolvers]
   [certificatesResolvers.default]
     [certificatesResolvers.default.acme]
-      email = "xarthisius.kk@gmail.com"
+      email = "someemail@somewhere.com"
       storage = "/acme/acme.json"
       [certificatesResolvers.default.acme.dnsChallenge]
         provider = "cloudflare"
-        delayBeforeCheck = "2m0s"
-        #entryPoint = "https"
+        delayBeforeCheck = "15s"

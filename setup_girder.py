@@ -71,9 +71,6 @@ settings = [
         ),
     },
     {"key": "core.cookie_domain", "value": f".{domain}"},
-    {"key": "worker.api_url", "value": "http://girder:8080/api/v1"},
-    {"key": "worker.broker", "value": "redis://redis/"},
-    {"key": "worker.backend", "value": "redis://redis/"},
     {"key": "oauth.globus_client_id", "value": os.environ.get("GLOBUS_CLIENT_ID")},
     {
         "key": "oauth.globus_client_secret",
