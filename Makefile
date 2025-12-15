@@ -1,6 +1,6 @@
 .PHONY: clean dirs deploy images restart_worker status
 
-SUBDIRS = volumes/ps volumes/workspaces volumes/homes volumes/base volumes/versions volumes/runs volumes/licenses traefik/acme volumes/registry
+SUBDIRS = volumes/ps volumes/workspaces volumes/homes volumes/base volumes/versions volumes/runs volumes/licenses traefik/acme volumes/registry volumes/io_manager_storage
 TAG = latest
 MEM_LIMIT = 2048
 NODE = node --max_old_space_size=${MEM_LIMIT}
