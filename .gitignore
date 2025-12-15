@@ -7,4 +7,3 @@ homes/*
 ps/*
 volumes/
 traefik/certs
-traefik/dynamic
