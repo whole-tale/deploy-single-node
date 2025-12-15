@@ -8,14 +8,19 @@ NG = ${NODE} ./node_modules/@angular/cli/bin/ng
 YARN = /usr/local/bin/yarn
 
 images:
-	docker pull traefik:alpine
-	docker pull mongo:3.2
-	docker pull redis:latest
+	docker pull traefik:v3.6
+	docker pull mongo:4.4
+	docker pull xarthisius/girder_wholetale:$(TAG)
+	docker pull wholetale/instance_logger:$(TAG)
+	docker pull wholetale/custom-errors:$(TAG)
+	docker pull redis:7-bullseye
 	docker pull registry:2.6
 	docker pull node:carbon-slim
-	docker pull wholetale/girder:2.x
-	docker pull wholetale/gwvolman:$(TAG)
-	docker pull wholetale/repo2docker_wholetale:$(TAG)
+	docker pull postgres:11
+	docker pull xarthisius/repo2docker_wholetale:20250415
+	docker pull wholetale/girderfs:$(TAG)
+	docker pull xarthisius/gwvolman:$(TAG)
+	docker pull xarthisius/dagster:$(TAG)
 	docker pull wholetale/ngx-dashboard:$(TAG)
 
 dirs: $(SUBDIRS)
