@@ -1,6 +1,6 @@
 services:
   traefik:
-    image: traefik:v2.4
+    image: traefik:v3.6
     ports:
       - "80:80"
       - "443:443"
@@ -9,13 +9,18 @@ services:
     volumes:
       - /var/run/docker.sock:/var/run/docker.sock
       - ./traefik:/etc/traefik
-      - ./traefik/acme:/acme
+      - ./traefik/certs/fullchain.pem:/cert.pem    # only for .local development use
+      - ./traefik/certs/privkey.pem:/key.pem       # only for .local development use
     deploy:
       replicas: 1
       labels:
         - "traefik.enable=false"
+      placement:
+        constraints:
+          - "node.role == manager"
     environment:
-      - CF_DNS_API_TOKEN=$WT_CLOUDFLARE_TOKEN
+      - TRAEFIK_PROVIDERS_DOCKER_DEFAULTRULE="Host(`\{\{ trimPrefix `/` .Name \}\}.${domain}`)"
+    # - CF_DNS_API_TOKEN=$WT_CLOUDFLARE_TOKEN      # only for real domain use
 
   mongo:
     image: mongo:4.4
@@ -30,8 +35,7 @@ services:
         - "traefik.enable=false"
 
   local_worker:
-    image: wholetale/girder:2.x
-    user: "${girder_uid}:${gider_gid}"
+    image: xarthisius/girder_wholetale:latest
     networks:
       - celery
       - mongo
@@ -48,19 +52,21 @@ services:
     environment:
       - DOMAIN=$WT_DOMAIN
       - DASHBOARD_URL=https://dashboard.${WT_DOMAIN}
-      - HOSTDIR=/
+      - GIRDER_HOST=0.0.0.0
       - GIRDER_MONGO_URI=mongodb://mongo:27017/girder
-      - GIRDER_WORKER_BACKEND=redis://redis:6379/
-      - GIRDER_WORKER_BROKER=redis://redis:6379/
-    entrypoint: ["/usr/bin/tini", "--", "celery", "--app=girder_worker.app", "worker", "--queues=local", "-c", "2", "--loglevel=INFO"]
+      - GIRDER_WORKER_BACKEND=redis://redis/
+      - GIRDER_WORKER_BROKER=redis://redis/
+      - GIRDER_NOTIFICATION_REDIS_URL=redis://redis:6379/
+      - GOSU_USER=${girder_uid}:${girder_gid}:${docker_group}
+      - HOSTDIR=/
+    entrypoint: ["/usr/bin/tini", "--", "/docker-entrypoint-worker.sh"]
     deploy:
       replicas: 1
       labels:
         - "traefik.enable=false"
 
   girder:
-    image: wholetale/girder:2.x
-    user: "${girder_uid}:${girder_gid}"
+    image: xarthisius/girder_wholetale:latest
     networks:
       - traefik-net
       - celery
@@ -77,11 +83,13 @@ services:
       - DOMAIN=$WT_DOMAIN
       - DASHBOARD_URL=https://dashboard.${WT_DOMAIN}
       - GIRDER_HOST=0.0.0.0
-      - HOSTDIR=/
       - GIRDER_MONGO_URI=mongodb://mongo:27017/girder
-      - GIRDER_WORKER_BACKEND=redis://redis:6379/
-      - GIRDER_WORKER_BROKER=redis://redis:6379/
-    entrypoint: ["/usr/bin/tini", "--", "girder", "serve", "-H", "0.0.0.0"]  # gunicorn doesn't work with notifications
+      - GIRDER_WORKER_BACKEND=redis://redis/
+      - GIRDER_WORKER_BROKER=redis://redis/
+      - GIRDER_NOTIFICATION_REDIS_URL=redis://redis:6379/
+      - GOSU_USER=${girder_uid}:${girder_gid}:${docker_group}
+      - HOSTDIR=/
+    entrypoint: ["/usr/bin/tini", "--", "/docker-entrypoint.sh"]
     deploy:
       replicas: 1
       labels:
@@ -204,7 +212,7 @@ services:
         - "traefik.docker.network=wt_traefik-net"
 
   celery_worker:
-    image: wholetale/gwvolman:v2.1.2
+    image: xarthisius/gwvolman:latest
     networks:
       - celery
     user: "1000:999"
@@ -218,25 +226,85 @@ services:
       - "registry.${WT_DOMAIN}:host-gateway"
       - "girder.${WT_DOMAIN}:host-gateway"
     environment:
-      - GIRDER_API_URL=http://girder:8080/api/v1
-      - GIRDER_WORKER_BACKEND=redis://redis:6379/
-      - GIRDER_WORKER_BROKER=redis://redis:6379/
+      - GOSU_USER=${girder_uid}:${girder_gid}:${docker_group}
       - DOMAIN=${WT_DOMAIN}
+      - REPO2DOCKER_VERSION=${r2d_version}
+      - GIRDERFS_IMAGE=${girderfs_image}
       - TRAEFIK_NETWORK=wt_traefik-net
       - TRAEFIK_ENTRYPOINT=websecure
-      - REGISTRY_USER=fido
+      - REGISTRY_USER=${registry_user}
       - REGISTRY_URL=https://registry.${WT_DOMAIN}
       - REGISTRY_PASS=${registry_pass}
       - WT_LICENSE_PATH=${PWD}/volumes/licenses
       - WT_VOLUMES_PATH=${PWD}/volumes
       - SWARM_NODE_ID={{.Node.ID}}
-      - REPO2DOCKER_VERSION=xarthisius/repo2docker_wholetale:20240926
-      - GIRDERFS_IMAGE=wholetale/girderfs:latest
     deploy:
       mode: global
       labels:
         - "traefik.enable=false"
     command: -c 3
+
+  dagster_web:
+    image: xarthisius/dagster:latest
+    depends_on:
+      - postgresql
+    entrypoint: ["dagster-webserver", "-h", "0.0.0.0", "-p", "3000", "-w", "workspace.yaml"]
+    networks:
+      - traefik-net
+      - dagster
+    deploy:
+      replicas: 1
+      labels:
+        - "traefik.enable=true"
+        - "traefik.http.routers.dagster.rule=Host(`dagster.${domain}`)"
+        - "traefik.http.routers.dagster.entrypoints=websecure"
+        - "traefik.http.routers.dagster.tls=true"
+        - "traefik.http.services.dagster.loadbalancer.server.port=3000"
+        - "traefik.http.services.dagster.loadbalancer.passhostheader=true"
+        - "traefik.docker.network=wt_traefik-net"
+    environment:
+      - DAGSTER_POSTGRES_USER=postgres_user
+      - DAGSTER_POSTGRES_PASSWORD=postgres_password
+      - DAGSTER_POSTGRES_DB=postgres_db
+    extra_hosts:
+      - "girder.${domain}:host-gateway"
+    volumes:
+      - ./workspace.yaml:/opt/dagster/dagster_home/workspace.yaml
+      - ./dagster.yaml:/opt/dagster/dagster_home/dagster.yaml
+      - /var/run/docker.sock:/var/run/docker.sock
+      - ./volumes/io_manager_storage:/tmp/io_manager_storage
+
+  dagster_daemon:
+    image: xarthisius/dagster:latest
+    entrypoint: ["dagster-daemon", "run"]
+    environment:
+      - DAGSTER_POSTGRES_USER=postgres_user
+      - DAGSTER_POSTGRES_PASSWORD=postgres_password
+      - DAGSTER_POSTGRES_DB=postgres_db
+    volumes:
+      - ./workspace.yaml:/opt/dagster/dagster_home/workspace.yaml
+      - ./dagster.yaml:/opt/dagster/dagster_home/dagster.yaml
+      - /var/run/docker.sock:/var/run/docker.sock
+      - ./volumes/io_manager_storage:/tmp/io_manager_storage
+    extra_hosts:
+      - "girder.${domain}:host-gateway"
+    networks:
+      - dagster
+    deploy:
+      replicas: 1
+      labels:
+        - "traefik.enable=false"
+
+  postgresql:
+    image: postgres:11
+    deploy:
+      replicas: 0
+    networks:
+      - dagster
+    environment:
+      - POSTGRES_USER=postgres_user
+      - POSTGRES_PASSWORD=postgres_password
+      - POSTGRES_DB=postgres_db
 
 networks:
   traefik-net:
@@ -245,6 +313,9 @@ networks:
     driver: overlay
     attachable: true
   celery:
+    driver: overlay
+    attachable: true
+  dagster:
     driver: overlay
     attachable: true
 
