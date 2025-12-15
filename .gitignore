@@ -1,3 +1,4 @@
+.env
 src/*
 registry/
 traefik/access.log

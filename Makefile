@@ -24,9 +24,23 @@ $(SUBDIRS):
 	@sudo mkdir -p $@
 	@sudo chown 1000:1000 $@
 
+.env:
+	curl -s -o .env https://wt.xarthisius.xyz/wt_local_env
+
+traefik/certs:
+	mkdir -p traefik/certs
+
+traefik/certs/fullchain.pem: traefik/certs
+	curl -s -o traefik/certs/fullchain.pem https://wt.xarthisius.xyz/wt_local_cert
+
+traefik/certs/privkey.pem: traefik/certs
+	curl -s -o traefik/certs/privkey.pem https://wt.xarthisius.xyz/wt_local_key
+
+certs: .env traefik/certs/fullchain.pem traefik/certs/privkey.pem
+
 services: dirs 
 
-deploy: dirs
+deploy: dirs certs
 	. ./.env && htpasswd -Bbn $${registry_user} $${registry_pass} > registry/auth/registry.password
 	. ./.env && docker stack config --compose-file docker-stack.yml | docker stack deploy --compose-file=docker-stack.yml wt
 	cid=$$(docker ps --filter=name=wt_girder -q);
@@ -38,23 +52,6 @@ deploy: dirs
 	true
 	./setup_girder.py
 
-restart_girder:
-	which jq || (echo "Please install jq to execute the 'restart_girder' make target" && exit 1)
-	docker exec --user=root -ti $$(docker ps --filter=name=wt_girder -q) pip install -r /gwvolman/requirements.txt -e /gwvolman
-	docker exec -ti $$(docker ps --filter=name=wt_girder -q) \
-                curl -XPUT -s 'http://localhost:8080/api/v1/system/restart' \
-                        --header 'Content-Type: application/json' \
-                        --header 'Accept: application/json' \
-                        --header 'Content-Length: 0' \
-                        --header "Girder-Token: $$(docker exec -ti $$(docker ps --filter=name=wt_girder -q) \
-                                curl 'http://localhost:8080/api/v1/user/authentication' \
-                                --basic --user admin:arglebargle123 \
-                                        | jq -r .authToken.token)"
-
-restart_worker:
-	docker exec --user=root -ti $$(docker ps --filter=name=wt_girder -q) pip install -e /gwvolman
-	./stop_worker.sh && ./run_worker.sh
-
 tail_girder_err:
 	docker exec -ti $$(docker ps --filter=name=wt_girder -q) \
 		tail -n 200 /home/girder/.girder/logs/error.log
@@ -64,7 +61,6 @@ reset_girder:
 		python3 -c 'from girder.models import getDbConnection;getDbConnection().drop_database("girder")'
 
 clean:
-	-./stop_worker.sh
 	-./destroy_instances.py
 	-docker stack rm wt
 	limit=15 ; \
