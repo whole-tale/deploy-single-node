@@ -1,6 +1,6 @@
 .env
 src/*
-registry/
+registry/auth/registry.password
 traefik/access.log
 traefik/acme
 homes/*
